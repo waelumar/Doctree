@@ -1,0 +1,19 @@
+{
+  "2fc7295b": {
+    "id": "2fc7295b",
+    "folder": "rfp_projects\\001_REQUEST_FOR_PROPOSAL_ORION_CONSUMER_GOODS_OCDG_COM",
+    "folder_name": "001_REQUEST_FOR_PROPOSAL_ORION_CONSUMER_GOODS_OCDG_COM",
+    "doc_title": "REQUEST FOR PROPOSAL ORION CONSUMER GOODS OCDG COMPLIANT",
+    "company_name": "Orion Consumer Goods Group (OCGG)",
+    "category": "General",
+    "status": "active",
+    "employee_count": 0,
+    "rfp_number": null,
+    "data_file": "rfp_projects\\001_REQUEST_FOR_PROPOSAL_ORION_CONSUMER_GOODS_OCDG_COM\\data.json",
+    "file_path": "rfp_projects\\001_REQUEST_FOR_PROPOSAL_ORION_CONSUMER_GOODS_OCDG_COM\\original.pdf",
+    "txt_path": "rfp_projects\\001_REQUEST_FOR_PROPOSAL_ORION_CONSUMER_GOODS_OCDG_COM\\extracted.txt",
+    "created_at": "2026-05-08T21:22:17.750724",
+    "page_count": 9,
+    "section_count": 13
+  }
+}

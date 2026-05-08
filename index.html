@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocTree — Projects</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --branch:       #7B4AE2;
+    --branch-light: #A78BFA;
+    --root-g1:      #4C1D9B;
+    --glow:         rgba(123,74,226,0.20);
+    --ink:          #12082A;
+    --paper:        #F3EEFF;
+    --mist:         #EDE8FA;
+    --slate:        #6B5C9E;
+    --leaf-border:  rgba(123,74,226,0.22);
+    --sb-w:         220px;
+    --sb-bg:        #0D0720;
+    --sb-border:    rgba(123,74,226,0.18);
+    --sb-active:    rgba(123,74,226,0.28);
+    --sb-hover:     rgba(123,74,226,0.12);
+  }
+  html, body { height: 100%; font-family: 'DM Sans', sans-serif; color: var(--ink); background: var(--paper); overflow: hidden; }
+
+  /* ── LAYOUT ──────────────────── */
+  .shell { display: flex; height: 100vh; }
+
+  /* ── SIDEBAR ─────────────────── */
+  #sidebar {
+    width: var(--sb-w); min-width: var(--sb-w);
+    background: var(--sb-bg);
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--sb-border);
+    transition: width 0.28s ease, min-width 0.28s ease;
+    overflow: hidden; z-index: 100; flex-shrink: 0;
+  }
+  #sidebar.collapsed { width: 60px; min-width: 60px; }
+  .sb-brand { display:flex; align-items:center; gap:10px; padding:18px 16px 14px; border-bottom:1px solid var(--sb-border); text-decoration:none; }
+  .sb-brand-icon { width:30px; height:30px; flex-shrink:0; background:linear-gradient(135deg,var(--root-g1),var(--branch-light)); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .sb-brand-text { font-family:'Syne',sans-serif; font-weight:800; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; transition:opacity 0.2s; }
+  #sidebar.collapsed .sb-brand-text { opacity:0; pointer-events:none; }
+  .sb-nav { flex:1; padding:12px 10px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; }
+  .sb-nav::-webkit-scrollbar { display:none; }
+  .sb-item { display:flex; align-items:center; gap:11px; padding:10px 10px; border-radius:10px; text-decoration:none; color:rgba(255,255,255,0.5); font-size:13px; font-weight:500; transition:all 0.16s; white-space:nowrap; overflow:hidden; }
+  .sb-item:hover { background:var(--sb-hover); color:rgba(255,255,255,0.85); }
+  .sb-item.active { background:var(--sb-active); color:#fff; }
+  .sb-item-icon { font-size:17px; flex-shrink:0; width:20px; text-align:center; }
+  .sb-item-label { transition:opacity 0.2s; }
+  #sidebar.collapsed .sb-item-label { opacity:0; pointer-events:none; }
+  .sb-footer { padding:12px 10px 16px; border-top:1px solid var(--sb-border); }
+  .sb-toggle { width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:9px; color:rgba(255,255,255,0.4); padding:8px; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.15s; }
+  .sb-toggle:hover { color:rgba(255,255,255,0.8); background:rgba(255,255,255,0.08); }
+  .sb-toggle-text { transition:opacity 0.2s; font-size:11px; }
+  #sidebar.collapsed .sb-toggle-text { opacity:0; width:0; overflow:hidden; }
+  .sb-section-label { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.2); padding:14px 10px 5px; }
+  #sidebar.collapsed .sb-section-label { opacity:0; }
+
+  /* ── MAIN ────────────────────── */
+  .main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+  .main::-webkit-scrollbar { width:5px; }
+  .main::-webkit-scrollbar-thumb { background:rgba(123,74,226,0.3); border-radius:4px; }
+
+  /* ── TOP BAR ──────────────────── */
+  .topbar { display:flex; align-items:center; padding:16px 40px; border-bottom:1px solid rgba(123,74,226,0.10); position:sticky; top:0; background:rgba(243,238,255,0.95); backdrop-filter:blur(10px); z-index:50; gap:12px; }
+  .topbar-title { font-family:'Syne',sans-serif; font-weight:800; font-size:16px; color:var(--ink); flex:1; }
+  .btn-upload { display:flex; align-items:center; gap:7px; background:linear-gradient(135deg,var(--root-g1),var(--branch)); color:#fff; border:none; padding:9px 18px; border-radius:10px; font-family:'Syne',sans-serif; font-weight:700; font-size:12px; cursor:pointer; transition:opacity 0.15s; }
+  .btn-upload:hover { opacity:0.88; }
+
+  /* ── HERO ─────────────────────── */
+  .hero { padding: 40px 40px 24px; background: radial-gradient(ellipse 55% 55% at 50% 0%, rgba(123,74,226,0.09) 0%, transparent 70%), var(--paper); }
+  .hero-eyebrow { font-size:10px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--branch); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+  .hero-eyebrow::before { content:''; display:inline-block; width:18px; height:2px; background:var(--branch); border-radius:2px; }
+  .hero-title { font-family:'Syne',sans-serif; font-size:clamp(20px,3vw,34px); font-weight:800; color:var(--ink); line-height:1.12; letter-spacing:-0.8px; margin-bottom:8px; max-width:600px; }
+  .hero-sub { font-size:13px; color:var(--slate); line-height:1.65; max-width:460px; margin-bottom:22px; }
+  .hero-stats { display:flex; gap:16px; flex-wrap:wrap; }
+  .stat-pill { display:flex; align-items:center; gap:8px; background:rgba(123,74,226,0.08); border:1px solid var(--leaf-border); padding:7px 16px; border-radius:20px; font-size:12px; font-weight:600; color:var(--branch); }
+  .stat-pill strong { font-size:17px; font-weight:800; color:var(--ink); }
+
+  /* ── GRID ─────────────────────── */
+  .grid-wrap { padding:24px 40px 60px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:18px; }
+
+  /* ── CARD ─────────────────────── */
+  .company-card { background:#fff; border:1.5px solid var(--leaf-border); border-radius:16px; cursor:pointer; position:relative; overflow:hidden; text-decoration:none; color:inherit; display:flex; flex-direction:column; min-height:195px; box-shadow:0 2px 14px rgba(76,29,155,0.08); transition:transform 0.22s cubic-bezier(.34,1.56,.64,1),box-shadow 0.22s,border-color 0.22s; opacity:0; transform:translateY(18px); }
+  .company-card.visible { opacity:1; transform:none; transition:opacity 0.34s ease,transform 0.34s ease,box-shadow 0.22s,border-color 0.22s; }
+  .company-card::before { content:''; position:absolute; top:0; left:0; right:0; height:4px; background:linear-gradient(90deg,var(--root-g1),var(--branch-light)); }
+  .company-card:hover { transform:translateY(-5px) scale(1.012); box-shadow:0 18px 50px rgba(76,29,155,0.16); border-color:rgba(123,74,226,0.42); }
+  .company-card:hover .card-arrow { opacity:1; transform:translateX(0); }
+  .card-body { padding:20px 18px 12px; flex:1; }
+  .card-top-row { display:flex; align-items:center; gap:12px; margin-bottom:13px; }
+  .card-avatar { width:42px; height:42px; border-radius:11px; flex-shrink:0; background:linear-gradient(135deg,var(--root-g1),var(--branch)); display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:800; font-size:16px; color:#fff; box-shadow:0 4px 16px var(--glow); }
+  .card-company-info { flex:1; min-width:0; }
+  .card-company-name { font-family:'Syne',sans-serif; font-weight:800; font-size:14px; color:var(--ink); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card-filename { font-size:10px; color:var(--slate); margin-top:2px; opacity:0.65; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card-arrow { font-size:16px; color:var(--branch); opacity:0; transform:translateX(-5px); transition:all 0.2s; flex-shrink:0; }
+  .card-doc-title { font-size:12px; color:var(--slate); line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .card-footer { padding:10px 18px 14px; border-top:1px solid rgba(123,74,226,0.09); display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
+  .meta-chip { font-size:10px; font-weight:600; color:var(--slate); background:var(--mist); border:1px solid rgba(123,74,226,0.12); padding:3px 8px; border-radius:6px; white-space:nowrap; }
+  .meta-chip.hi { background:rgba(123,74,226,0.10); color:var(--branch); border-color:rgba(123,74,226,0.24); }
+  .meta-chip.win { background:rgba(5,150,105,0.10); color:#059669; border-color:rgba(5,150,105,0.24); }
+  .meta-chip.loss { background:rgba(220,38,38,0.08); color:#dc2626; border-color:rgba(220,38,38,0.2); }
+  .meta-chip.active { background:rgba(37,99,235,0.08); color:#2563eb; border-color:rgba(37,99,235,0.2); }
+
+  /* ── UPLOAD MODAL ─────────────── */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(18,8,42,0.55); backdrop-filter:blur(5px); z-index:500; display:none; align-items:center; justify-content:center; }
+  .modal-backdrop.open { display:flex; animation:fadeIn 0.2s ease; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .modal { background:#fff; border-radius:18px; width:500px; max-width:94vw; box-shadow:0 24px 80px rgba(76,29,155,0.28); animation:modalUp 0.25s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes modalUp { from{opacity:0;transform:translateY(20px) scale(0.97)} to{opacity:1;transform:none} }
+  .modal-header { padding:20px 24px 16px; border-bottom:1px solid rgba(123,74,226,0.12); display:flex; align-items:center; justify-content:space-between; }
+  .modal-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:800; color:var(--ink); }
+  .modal-close { width:28px; height:28px; border-radius:7px; border:1px solid rgba(123,74,226,0.2); background:var(--mist); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--slate); transition:all 0.14s; }
+  .modal-close:hover { background:rgba(123,74,226,0.12); color:var(--branch); }
+  .modal-body { padding:20px 24px 24px; display:flex; flex-direction:column; gap:16px; }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--slate); }
+  .form-input, .form-select { padding:10px 13px; border:1.5px solid rgba(123,74,226,0.2); border-radius:9px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--ink); background:#fff; outline:none; transition:border-color 0.15s; }
+  .form-input:focus, .form-select:focus { border-color:var(--branch); }
+  .file-drop { border:2px dashed rgba(123,74,226,0.3); border-radius:12px; padding:28px 20px; text-align:center; cursor:pointer; transition:all 0.15s; background:rgba(123,74,226,0.02); }
+  .file-drop:hover, .file-drop.drag { border-color:var(--branch); background:rgba(123,74,226,0.05); }
+  .file-drop-icon { font-size:28px; margin-bottom:8px; }
+  .file-drop-text { font-size:12.5px; color:var(--slate); }
+  .file-drop-text strong { color:var(--branch); }
+  #fileInput { display:none; }
+  .file-selected { font-size:12px; color:var(--branch); font-weight:600; margin-top:6px; }
+  .btn-submit { background:linear-gradient(135deg,var(--root-g1),var(--branch)); color:#fff; border:none; padding:12px 24px; border-radius:10px; font-family:'Syne',sans-serif; font-weight:700; font-size:13px; cursor:pointer; transition:opacity 0.15s; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-submit:hover { opacity:0.88; }
+  .btn-submit:disabled { opacity:0.5; cursor:not-allowed; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .progress-bar { height:4px; background:rgba(123,74,226,0.15); border-radius:4px; overflow:hidden; display:none; }
+  .progress-bar.active { display:block; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,var(--root-g1),var(--branch-light)); border-radius:4px; animation:progress 2s ease-in-out infinite; }
+  @keyframes progress { 0%{width:0%;margin-left:0} 50%{width:70%;margin-left:0} 100%{width:10%;margin-left:90%} }
+
+  /* ── EMPTY STATE ──────────────── */
+  .empty-state { grid-column:1/-1; min-height:44vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:48px; }
+  .empty-icon { font-size:44px; }
+  .empty-title { font-family:'Syne',sans-serif; font-size:17px; font-weight:800; color:var(--ink); }
+  .empty-msg { font-size:13px; color:var(--slate); line-height:1.65; max-width:340px; }
+
+  /* ── TOAST ────────────────────── */
+  .toast { position:fixed; bottom:24px; right:24px; background:linear-gradient(135deg,var(--root-g1),var(--branch)); color:#fff; padding:12px 20px; border-radius:12px; font-size:13px; font-weight:500; box-shadow:0 8px 30px rgba(76,29,155,0.3); z-index:600; transform:translateY(80px); opacity:0; transition:all 0.3s cubic-bezier(.34,1.56,.64,1); }
+  .toast.show { transform:translateY(0); opacity:1; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <a class="sb-brand" href="index.html">
+      <div class="sb-brand-icon">🌳</div>
+      <span class="sb-brand-text">DOCTREE</span>
+    </a>
+        <nav class="sb-nav">
+      <div class="sb-section-label">Menu</div>
+      <a class="sb-item active" href="index.html"><span class="sb-item-icon"></span><span class="sb-item-label">Projects</span></a>
+      <a class="sb-item" href="analyzer.html"><span class="sb-item-icon"></span><span class="sb-item-label">Analyzer</span></a>
+      <a class="sb-item" href="chatbot.html"><span class="sb-item-icon"></span><span class="sb-item-label">Chatbot</span></a>
+      <a class="sb-item" href="analytics.html"><span class="sb-item-icon"></span><span class="sb-item-label">Analytics</span></a>
+      <a class="sb-item" href="market.html"><span class="sb-item-icon"></span><span class="sb-item-label">Market Research</span></a>
+      <a class="sb-item" href="ppt_gen.html"><span class="sb-item-icon"></span><span class="sb-item-label">PPT Generator</span></a>
+    </nav>
+    <div class="sb-footer">
+      <button class="sb-toggle" id="sbToggle">
+        <span id="sbArrow">◀</span>
+        <span class="sb-toggle-text" id="sbToggleText">Collapse</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-title">Projects</div>
+      <button class="btn-upload" onclick="openUploadModal()">＋ Upload RFP</button>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-eyebrow">RFP Intelligence Dashboard</div>
+      <div class="hero-title">DOCTREE</div>
+      <div class="hero-sub">Upload and manage your RFP documents</div>
+      <div class="hero-stats">
+        <div class="stat-pill"><strong id="statDocs">—</strong>&nbsp;projects</div>
+        <div class="stat-pill"><strong id="statSections">—</strong>&nbsp;total sections</div>
+        <div class="stat-pill"><strong id="statWins">—</strong>&nbsp;wins</div>
+      </div>
+    </div>
+
+    <!-- GRID -->
+    <div class="grid-wrap">
+      <div class="grid" id="grid">
+        <div class="empty-state">
+          <div class="empty-icon">📂</div>
+          <div class="empty-title">Loading projects…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-backdrop" id="uploadModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Upload New RFP</div>
+      <button class="modal-close" onclick="closeUploadModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">RFP Document</label>
+        <div class="file-drop" id="fileDrop" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" accept=".pdf,.txt" onchange="onFileSelected(this)">
+          <div class="file-drop-icon">📄</div>
+          <div class="file-drop-text">Drop your <strong>PDF or TXT</strong> here, or click to browse</div>
+          <div class="file-selected" id="fileSelectedLabel"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category / Sector</label>
+          <select class="form-select" id="catSelect">
+            <option value="General">General</option>
+            <option value="Medical">Medical</option>
+            <option value="Technical">Technical</option>
+            <option value="Retail">Retail</option>
+            <option value="IT">IT</option>
+            <option value="Construction">Construction</option>
+            <option value="Finance">Finance</option>
+            <option value="Legal">Legal</option>
+            <option value="Education">Education</option>
+            <option value="Government">Government</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="statusSelect">
+            <option value="active">Active</option>
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Employee Count (optional)</label>
+        <input type="number" class="form-input" id="empCount" placeholder="e.g. 50" min="0">
+      </div>
+      <div class="progress-bar" id="progressBar"><div class="progress-fill"></div></div>
+      <button class="btn-submit" id="submitBtn" onclick="submitUpload()"> Analyze & Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:5000/api';
+let projects = [];
+
+// ── SIDEBAR COLLAPSE ──────────────────
+const sb = document.getElementById('sidebar');
+const sbArrow = document.getElementById('sbArrow');
+const sbText  = document.getElementById('sbToggleText');
+let collapsed = localStorage.getItem('sb_collapsed') === '1';
+function applyCollapse() {
+  if (collapsed) { sb.classList.add('collapsed'); sbArrow.textContent='▶'; sbText.textContent=''; }
+  else { sb.classList.remove('collapsed'); sbArrow.textContent='◀'; sbText.textContent='Collapse'; }
+}
+applyCollapse();
+document.getElementById('sbToggle').addEventListener('click', () => {
+  collapsed = !collapsed;
+  localStorage.setItem('sb_collapsed', collapsed ? '1' : '0');
+  applyCollapse();
+});
+
+// ── LOAD PROJECTS ─────────────────────
+async function loadProjects() {
+  try {
+    const res = await fetch(`${API}/projects`);
+    if (!res.ok) throw new Error();
+    projects = await res.json();
+    renderGrid();
+  } catch {
+    // Fallback: try loading local JSON files
+    await loadLocalFiles();
+  }
+}
+
+async function loadLocalFiles() {
+  const KNOWN = ['data.json','data2.json','data3.json','data4.json','data5.json'];
+  const AUTO  = ['rfp.json','rfp1.json','rfp2.json','output.json'];
+  const all   = [...new Set([...KNOWN, ...AUTO])];
+  projects = [];
+  await Promise.all(all.map(async (f, i) => {
+    try {
+      const r = await fetch(f + '?_=' + Date.now());
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d || !d.nodes) return;
+      projects.push({
+        id: 'local_' + i,
+        doc_title:    d.doc_title    || f,
+        company_name: d.company_name || '—',
+        category:     'General',
+        status:       'active',
+        data_file:    f,
+        section_count: d.nodes.length,
+        created_at:   new Date().toISOString(),
+      });
+    } catch {}
+  }));
+  renderGrid();
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  const wins = projects.filter(p => p.status === 'win').length;
+  document.getElementById('statDocs').textContent     = projects.length;
+  document.getElementById('statSections').textContent = projects.reduce((s,p) => s + (p.section_count||0), 0);
+  document.getElementById('statWins').textContent     = wins;
+
+  if (projects.length === 0) {
+    grid.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📂</div>
+      <div class="empty-title">No projects yet</div>
+      <div class="empty-msg">Upload your first RFP document to get started with AI-powered analysis.</div>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = '';
+  projects.forEach((p, i) => grid.appendChild(buildCard(p, i)));
+}
+
+function buildCard(p, index) {
+  const initials = (p.company_name || '?').split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const statusChip = p.status === 'win'  ? '<span class="meta-chip win">✓ Win</span>'
+                   : p.status === 'loss' ? '<span class="meta-chip loss">✗ Loss</span>'
+                   : '<span class="meta-chip active">● Active</span>';
+
+  const a = document.createElement('a');
+  a.className = 'company-card';
+  const analyzerHref = p.data_file
+    ? `analyzer.html?file=${encodeURIComponent(p.data_file)}`
+    : `analyzer.html?project=${encodeURIComponent(p.id)}`;
+  a.href = analyzerHref;
+
+  a.innerHTML = `
+    <div class="card-body">
+      <div class="card-top-row">
+        <div class="card-avatar">${initials}</div>
+        <div class="card-company-info">
+          <div class="card-company-name">${esc(p.company_name || '—')}</div>
+          <div class="card-filename">📄 ${esc(p.doc_title || '—')}</div>
+        </div>
+        <div class="card-arrow">→</div>
+      </div>
+      <div class="card-doc-title">${esc(p.doc_title || '')}</div>
+    </div>
+    <div class="card-footer">
+      <span class="meta-chip hi">📋 ${p.section_count||0} sections</span>
+      <span class="meta-chip">${esc(p.category||'General')}</span>
+      ${statusChip}
+    </div>`;
+
+  setTimeout(() => a.classList.add('visible'), 50 + index * 70);
+  return a;
+}
+
+// ── UPLOAD ────────────────────────────
+function openUploadModal()  { document.getElementById('uploadModal').classList.add('open'); }
+function closeUploadModal() { document.getElementById('uploadModal').classList.remove('open'); }
+document.getElementById('uploadModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('uploadModal')) closeUploadModal();
+});
+
+let selectedFile = null;
+function onFileSelected(input) {
+  selectedFile = input.files[0];
+  document.getElementById('fileSelectedLabel').textContent = selectedFile ? '✓ ' + selectedFile.name : '';
+}
+
+// Drag & drop
+const drop = document.getElementById('fileDrop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) { selectedFile = f; document.getElementById('fileSelectedLabel').textContent = '✓ ' + f.name; }
+});
+
+async function submitUpload() {
+  if (!selectedFile) { showToast('Please select a file first.'); return; }
+  const btn = document.getElementById('submitBtn');
+  const progress = document.getElementById('progressBar');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Analyzing…';
+  progress.classList.add('active');
+
+  const fd = new FormData();
+  fd.append('file', selectedFile);
+  fd.append('category', document.getElementById('catSelect').value);
+  fd.append('status', document.getElementById('statusSelect').value);
+  fd.append('employee_count', document.getElementById('empCount').value || '0');
+
+  try {
+    const res = await fetch(`${API}/upload`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    showToast('✓ Project uploaded and analyzed!');
+    closeUploadModal();
+    await loadProjects();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🚀 Analyze & Upload';
+    progress.classList.remove('active');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadProjects();
+</script>
+</body>
+</html>

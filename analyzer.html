@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocTree — Analyzer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --branch:       #7B4AE2;
+    --branch-light: #A78BFA;
+    --root-g1:      #4C1D9B;
+    --glow:         rgba(123,74,226,0.18);
+    --ink:          #12082A;
+    --paper:        #F3EEFF;
+    --mist:         #EDE8FA;
+    --slate:        #6B5C9E;
+    --leaf-border:  rgba(123,74,226,0.22);
+    --sb-w:         220px;
+    --sb-bg:        #0D0720;
+    --sb-border:    rgba(123,74,226,0.18);
+    --sb-active:    rgba(123,74,226,0.28);
+    --sb-hover:     rgba(123,74,226,0.12);
+    --c-context:    #0891b2; --c-requirements:#7B4AE2; --c-financial:#d97706;
+    --c-schedule:   #059669; --c-legal:#dc2626; --c-evaluation:#ea580c;
+    --c-technical:  #2563eb; --c-strategy:#db2777; --c-section:#4f46e5; --c-analysis:#0d9488;
+    --highlight:    rgba(253,224,71,0.78); --highlight-text:#5c4a00;
+    --suggest-bg:   #F9F6FF; --suggest-border:rgba(123,74,226,0.18);
+  }
+  html, body { height:100%; font-family:'DM Sans',sans-serif; color:var(--ink); background:var(--paper); overflow:hidden; }
+
+  .shell { display:flex; height:100vh; }
+
+  /* SIDEBAR */
+  #sidebar { width:var(--sb-w); min-width:var(--sb-w); background:var(--sb-bg); display:flex; flex-direction:column; border-right:1px solid var(--sb-border); transition:width 0.28s ease,min-width 0.28s ease; overflow:hidden; z-index:100; flex-shrink:0; }
+  #sidebar.collapsed { width:60px; min-width:60px; }
+  .sb-brand { display:flex; align-items:center; gap:10px; padding:18px 16px 14px; border-bottom:1px solid var(--sb-border); text-decoration:none; }
+  .sb-brand-icon { width:30px; height:30px; flex-shrink:0; background:linear-gradient(135deg,var(--root-g1),var(--branch-light)); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .sb-brand-text { font-family:'Syne',sans-serif; font-weight:800; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; transition:opacity 0.2s; }
+  #sidebar.collapsed .sb-brand-text { opacity:0; pointer-events:none; }
+  .sb-nav { flex:1; padding:12px 10px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; }
+  .sb-nav::-webkit-scrollbar { display:none; }
+  .sb-item { display:flex; align-items:center; gap:11px; padding:10px 10px; border-radius:10px; text-decoration:none; color:rgba(255,255,255,0.5); font-size:13px; font-weight:500; transition:all 0.16s; white-space:nowrap; overflow:hidden; }
+  .sb-item:hover { background:var(--sb-hover); color:rgba(255,255,255,0.85); }
+  .sb-item.active { background:var(--sb-active); color:#fff; }
+  .sb-item-icon { font-size:17px; flex-shrink:0; width:20px; text-align:center; }
+  .sb-item-label { transition:opacity 0.2s; }
+  #sidebar.collapsed .sb-item-label { opacity:0; pointer-events:none; }
+  .sb-footer { padding:12px 10px 16px; border-top:1px solid var(--sb-border); }
+  .sb-toggle { width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:9px; color:rgba(255,255,255,0.4); padding:8px; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.15s; }
+  .sb-toggle:hover { color:rgba(255,255,255,0.8); background:rgba(255,255,255,0.08); }
+  .sb-toggle-text { transition:opacity 0.2s; font-size:11px; }
+  #sidebar.collapsed .sb-toggle-text { opacity:0; width:0; overflow:hidden; }
+  .sb-section-label { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.2); padding:14px 10px 5px; }
+  #sidebar.collapsed .sb-section-label { opacity:0; }
+
+  /* MAIN */
+  .main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* HEADER */
+  .app-header { background:var(--paper); padding:22px 36px 16px; border-bottom:1px solid rgba(123,74,226,0.12); backdrop-filter:blur(10px); flex-shrink:0; }
+  .header-eyebrow { font-size:10px; font-weight:700; letter-spacing:2.5px; text-transform:uppercase; color:var(--branch); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .header-eyebrow::before { content:''; display:inline-block; width:18px; height:2px; background:var(--branch); border-radius:2px; }
+  .doc-title-header { font-family:'Syne',sans-serif; font-size:clamp(16px,2.5vw,26px); font-weight:800; color:var(--ink); line-height:1.15; letter-spacing:-0.5px; max-width:860px; margin-bottom:6px; }
+  .header-meta { display:flex; gap:16px; align-items:center; flex-wrap:wrap; font-size:12px; color:var(--slate); }
+  .company-badge { display:inline-flex; align-items:center; gap:5px; background:rgba(123,74,226,0.10); border:1px solid rgba(123,74,226,0.22); padding:3px 11px; border-radius:20px; color:var(--branch); font-size:11px; font-weight:600; }
+  .back-link { display:inline-flex; align-items:center; gap:5px; color:var(--slate); font-size:12px; text-decoration:none; transition:color 0.15s; margin-bottom:8px; }
+  .back-link:hover { color:var(--branch); }
+
+  /* SCROLL AREA */
+  .scroll-area { flex:1; overflow-y:auto; }
+  .scroll-area::-webkit-scrollbar { width:4px; }
+  .scroll-area::-webkit-scrollbar-thumb { background:rgba(123,74,226,0.3); border-radius:4px; }
+
+  /* GRID */
+  .grid-wrap { padding:22px 36px 60px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(255px,1fr)); gap:16px; }
+
+  /* CARD */
+  .card { background:#fff; border:1.5px solid var(--leaf-border); border-radius:14px; cursor:pointer; position:relative; overflow:hidden; transition:transform 0.22s cubic-bezier(.34,1.56,.64,1),box-shadow 0.22s,border-color 0.22s; display:flex; flex-direction:column; min-height:175px; box-shadow:0 2px 10px rgba(76,29,155,0.07); user-select:none; }
+  .card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent-color,var(--c-section)); }
+  .card:hover { transform:translateY(-4px) scale(1.011); box-shadow:0 14px 38px rgba(76,29,155,0.13); border-color:rgba(123,74,226,0.38); }
+  .card.checked { border-color:var(--branch); background:rgba(123,74,226,0.03); box-shadow:0 0 0 3px var(--glow),0 6px 24px rgba(76,29,155,0.12); }
+  .card-check-box { position:absolute; top:12px; right:12px; z-index:3; width:18px; height:18px; border-radius:5px; border:2px solid rgba(123,74,226,0.32); background:#fff; display:flex; align-items:center; justify-content:center; transition:all 0.15s; box-shadow:0 1px 4px rgba(0,0,0,0.07); }
+  .card-check-box:hover { border-color:var(--branch); }
+  .card-check-box.on { background:var(--branch); border-color:var(--branch); }
+  .card-check-box.on::after { content:''; display:block; width:5px; height:8px; border:2px solid #fff; border-top:none; border-left:none; transform:rotate(45deg) translate(-1px,-1px); }
+  .card-inner { padding:18px 16px 12px; flex:1; display:flex; flex-direction:column; gap:8px; }
+  .card-icon-row { display:flex; align-items:center; gap:9px; padding-right:22px; }
+  .card-icon { width:28px; height:28px; border-radius:7px; flex-shrink:0; background:var(--mist); display:flex; align-items:center; justify-content:center; font-size:13px; border:1px solid rgba(123,74,226,0.14); }
+  .card-cat-label { font-size:9px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:var(--accent-color,var(--c-section)); }
+  .card-title { font-family:'Syne',sans-serif; font-size:14.5px; font-weight:700; color:var(--ink); line-height:1.25; }
+  .card-desc { font-size:11.5px; color:var(--slate); line-height:1.6; flex:1; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+  .card-footer { padding:9px 16px 12px; border-top:1px solid rgba(123,74,226,0.09); display:flex; flex-wrap:wrap; gap:4px; }
+  .card-tag-pill { font-size:9px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; color:var(--slate); background:var(--mist); border:1px solid rgba(123,74,226,0.13); padding:2px 7px; border-radius:6px; white-space:nowrap; }
+
+  /* FLOATING TOOLBAR */
+  .select-toolbar { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:12px; background:linear-gradient(135deg,var(--root-g1),var(--branch)); color:#fff; padding:12px 18px; border-radius:14px; box-shadow:0 8px 32px rgba(76,29,155,0.38); z-index:300; white-space:nowrap; animation:slideUp 0.25s cubic-bezier(.34,1.56,.64,1); }
+  .select-toolbar.visible { display:flex; }
+  @keyframes slideUp { from{opacity:0;transform:translateX(-50%) translateY(12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+  .toolbar-count { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; }
+  .toolbar-count span { background:rgba(255,255,255,0.18); padding:2px 10px; border-radius:20px; margin-right:4px; }
+  .toolbar-btn { background:#fff; color:var(--root-g1); border:none; padding:8px 16px; border-radius:9px; font-family:'Syne',sans-serif; font-weight:700; font-size:12px; cursor:pointer; transition:opacity 0.15s; display:flex; align-items:center; gap:6px; }
+  .toolbar-btn:hover { opacity:0.88; }
+  .toolbar-clear { background:transparent; color:rgba(255,255,255,0.65); border:none; font-size:11px; cursor:pointer; padding:4px 8px; border-radius:6px; transition:color 0.15s; }
+  .toolbar-clear:hover { color:#fff; }
+
+  /* PANEL */
+  .panel-overlay { position:fixed; inset:0; z-index:200; display:flex; align-items:stretch; justify-content:flex-end; pointer-events:none; }
+  .panel-backdrop { position:absolute; inset:0; background:rgba(18,8,42,0.42); backdrop-filter:blur(3px); opacity:0; transition:opacity 0.3s ease; pointer-events:none; }
+  .panel-overlay.open .panel-backdrop { opacity:1; pointer-events:all; }
+  .panel { position:relative; z-index:1; width:510px; max-width:93vw; background:#fff; height:100%; overflow-y:auto; display:flex; flex-direction:column; transform:translateX(100%); transition:transform 0.36s cubic-bezier(.4,0,.2,1); pointer-events:all; box-shadow:-16px 0 48px rgba(76,29,155,0.18); }
+  .panel-overlay.open .panel { transform:translateX(0); }
+  .panel::-webkit-scrollbar { width:4px; }
+  .panel::-webkit-scrollbar-thumb { background:rgba(123,74,226,0.3); border-radius:4px; }
+  .panel-header { padding:20px 22px 14px; border-bottom:1px solid rgba(123,74,226,0.10); position:sticky; top:0; background:#fff; z-index:2; }
+  .panel-header-row { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .panel-cat { font-size:9px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:var(--branch); margin-bottom:5px; display:flex; align-items:center; gap:6px; }
+  .panel-cat-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .panel-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; color:var(--ink); line-height:1.2; letter-spacing:-0.3px; }
+  .panel-close { width:28px; height:28px; flex-shrink:0; border-radius:7px; border:1px solid rgba(123,74,226,0.2); background:var(--mist); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; color:var(--slate); transition:all 0.15s; margin-top:2px; }
+  .panel-close:hover { background:rgba(123,74,226,0.12); color:var(--branch); }
+  .panel-add-btn { display:inline-flex; align-items:center; gap:6px; margin-top:11px; font-size:11.5px; font-weight:600; color:var(--branch); background:var(--mist); border:1.5px solid var(--leaf-border); padding:6px 13px; border-radius:8px; cursor:pointer; transition:all 0.15s; }
+  .panel-add-btn:hover { background:rgba(123,74,226,0.12); }
+  .panel-add-btn.active { background:var(--branch); color:#fff; border-color:var(--branch); }
+  .panel-body { padding:18px 22px 28px; flex:1; }
+  .p-label { font-size:9px; font-weight:700; letter-spacing:1.8px; text-transform:uppercase; color:var(--slate); opacity:0.6; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .p-label::after { content:''; flex:1; height:1px; background:rgba(123,74,226,0.10); }
+  .brief-box { background:var(--mist); border-radius:10px; padding:14px 15px; margin-bottom:18px; font-size:13px; line-height:1.9; color:#3a2f5e; border:1px solid rgba(123,74,226,0.12); }
+  .summary-box { background:rgba(123,74,226,0.04); border-left:3px solid var(--branch-light); border-radius:0 8px 8px 0; padding:12px 14px; margin-bottom:18px; font-size:13px; line-height:1.85; color:var(--ink); font-style:italic; }
+  mark.kw { background:var(--highlight); color:var(--highlight-text); border-radius:3px; padding:0 2px; font-style:normal; font-weight:500; }
+  .suggestions-wrap { background:var(--suggest-bg); border:1px solid var(--suggest-border); border-radius:12px; padding:12px; }
+  .suggestion-item { display:flex; align-items:flex-start; gap:9px; font-size:12.5px; line-height:1.65; color:#3a2f5e; padding:9px 10px; background:rgba(255,255,255,0.78); border-radius:8px; border:1px solid rgba(123,74,226,0.09); margin-bottom:6px; transition:background 0.13s; }
+  .suggestion-item:last-child { margin-bottom:0; }
+  .suggestion-item:hover { background:#fff; border-color:rgba(123,74,226,0.2); }
+  .suggestion-dot { width:6px; height:6px; border-radius:50%; background:var(--branch); flex-shrink:0; margin-top:6px; opacity:0.7; }
+
+  /* MODAL */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(18,8,42,0.50); backdrop-filter:blur(4px); z-index:500; display:none; align-items:center; justify-content:center; }
+  .modal-backdrop.open { display:flex; animation:fadeIn 0.2s ease; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .modal { background:#fff; border-radius:18px; width:840px; max-width:95vw; max-height:86vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(76,29,155,0.28); animation:modalUp 0.26s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes modalUp { from{opacity:0;transform:translateY(20px) scale(0.97)} to{opacity:1;transform:none} }
+  .modal-header { padding:18px 24px 14px; border-bottom:1px solid rgba(123,74,226,0.12); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .modal-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:800; color:var(--ink); }
+  .modal-subtitle { font-size:11px; color:var(--slate); margin-top:2px; }
+  .modal-actions { display:flex; gap:10px; align-items:center; }
+  .modal-close-btn { width:28px; height:28px; border-radius:7px; border:1px solid rgba(123,74,226,0.2); background:var(--mist); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--slate); }
+  .modal-close-btn:hover { background:rgba(123,74,226,0.12); color:var(--branch); }
+  .modal-download { background:linear-gradient(135deg,var(--root-g1),var(--branch)); color:#fff; border:none; padding:8px 16px; border-radius:9px; font-family:'Syne',sans-serif; font-weight:700; font-size:11px; cursor:pointer; }
+  .modal-body { flex:1; overflow-y:auto; padding:24px 28px; }
+  .modal-body::-webkit-scrollbar { width:4px; }
+  .modal-body::-webkit-scrollbar-thumb { background:var(--branch-light); border-radius:4px; }
+  .report-header-block { margin-bottom:28px; padding-bottom:20px; border-bottom:2px solid rgba(123,74,226,0.14); }
+  .report-doc-label { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--branch); margin-bottom:6px; }
+  .report-doc-title { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:var(--ink); margin-bottom:6px; }
+  .report-meta { font-size:12px; color:var(--slate); display:flex; gap:16px; flex-wrap:wrap; }
+  .report-section { margin-bottom:28px; padding-bottom:24px; border-bottom:1px solid rgba(123,74,226,0.09); }
+  .report-section:last-child { border-bottom:none; }
+  .report-section-header { display:flex; align-items:flex-start; gap:12px; margin-bottom:13px; }
+  .report-section-num { width:26px; height:26px; border-radius:7px; background:linear-gradient(135deg,var(--root-g1),var(--branch)); color:#fff; font-family:'Syne',sans-serif; font-weight:800; font-size:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .report-section-tag { font-size:9px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--branch); margin-bottom:3px; }
+  .report-section-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:800; color:var(--ink); }
+  .report-brief { font-size:13px; line-height:1.85; color:#3a2f5e; padding:12px 14px; background:var(--mist); border-radius:9px; border-left:3px solid var(--branch-light); margin-bottom:11px; }
+  .report-summary { font-size:13px; line-height:1.8; color:var(--slate); font-style:italic; margin-bottom:13px; }
+  .report-suggestion { display:flex; align-items:flex-start; gap:9px; padding:9px 12px; background:var(--suggest-bg); border:1px solid var(--suggest-border); border-radius:8px; margin-bottom:6px; font-size:12.5px; line-height:1.65; color:#3a2f5e; }
+  .report-dot { width:6px; height:6px; border-radius:50%; background:var(--branch); flex-shrink:0; margin-top:5px; opacity:0.7; }
+
+  /* LOADING */
+  .loading-screen { min-height:55vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+  .loading-spinner { width:32px; height:32px; border-radius:50%; border:3px solid rgba(123,74,226,0.2); border-top-color:var(--branch); animation:spin 0.85s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .loading-text { font-size:13px; color:var(--slate); }
+  .error-box { min-height:55vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:40px; }
+  .error-icon { font-size:36px; }
+  .error-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; color:var(--ink); }
+  .error-msg { font-size:12.5px; color:var(--slate); line-height:1.6; max-width:360px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <a class="sb-brand" href="index.html">
+      <div class="sb-brand-icon">🌳</div>
+      <span class="sb-brand-text">DOCTREE</span>
+    </a>
+        <nav class="sb-nav">
+      <div class="sb-section-label">Menu</div>
+      <a class="sb-item" href="index.html"><span class="sb-item-icon"></span><span class="sb-item-label">Projects</span></a>
+      <a class="sb-item active" href="analyzer.html"><span class="sb-item-icon"></span><span class="sb-item-label">Analyzer</span></a>
+      <a class="sb-item" href="chatbot.html"><span class="sb-item-icon"></span><span class="sb-item-label">Chatbot</span></a>
+      <a class="sb-item" href="analytics.html"><span class="sb-item-icon"></span><span class="sb-item-label">Analytics</span></a>
+      <a class="sb-item" href="market.html"><span class="sb-item-icon"></span><span class="sb-item-label">Market Research</span></a>
+      <a class="sb-item" href="ppt_gen.html"><span class="sb-item-icon"></span><span class="sb-item-label">PPT Generator</span></a>
+    </nav>
+    <div class="sb-footer">
+      <button class="sb-toggle" id="sbToggle">
+        <span id="sbArrow">◀</span>
+        <span class="sb-toggle-text" id="sbToggleText">Collapse</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="app-header">
+      <div class="header-eyebrow">RFP Document Analyzer</div>
+      <a class="back-link" href="index.html">← Back to Projects</a>
+      <div class="doc-title-header" id="docTitleHeader">Loading…</div>
+      <div class="header-meta" id="headerMeta"></div>
+    </div>
+    <div class="scroll-area">
+      <div class="grid-wrap">
+        <div id="mainContent">
+          <div class="loading-screen"><div class="loading-spinner"></div><div class="loading-text">Loading RFP data…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FLOATING TOOLBAR -->
+<div class="select-toolbar" id="selectToolbar">
+  <div class="toolbar-count"><span id="toolbarCount">0</span> selected</div>
+  <button class="toolbar-btn" onclick="openReport()">⬇ Generate Report</button>
+  <button class="toolbar-clear" onclick="clearSelection()">✕ Clear</button>
+</div>
+
+<!-- SLIDE PANEL -->
+<div class="panel-overlay" id="panelOverlay">
+  <div class="panel-backdrop" id="panelBackdrop"></div>
+  <div class="panel" id="panel">
+    <div class="panel-header">
+      <div class="panel-header-row">
+        <div>
+          <div class="panel-cat" id="panelCat"><span class="panel-cat-dot"></span>Section</div>
+          <div class="panel-title" id="panelTitle">—</div>
+        </div>
+        <button class="panel-close" id="panelClose">✕</button>
+      </div>
+      <button class="panel-add-btn" id="panelAddBtn" onclick="toggleFromPanel()">☐ Add to Report</button>
+    </div>
+    <div class="panel-body">
+      <div class="p-label">Detailed Brief</div>
+      <div class="brief-box" id="panelBrief"></div>
+      <div class="p-label">Summary</div>
+      <div class="summary-box" id="panelSummary"></div>
+      <div class="p-label">Recommendations</div>
+      <div class="suggestions-wrap" id="suggestionsList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-backdrop" id="reportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">RFP Solution Document</div>
+        <div class="modal-subtitle" id="reportSubtitle">—</div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-download" onclick="downloadReport()">⬇ Download HTML</button>
+        <button class="modal-close-btn" onclick="closeReport()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="reportBody"></div>
+  </div>
+</div>
+
+<script>
+// Sidebar collapse
+const sb = document.getElementById('sidebar');
+let collapsed = localStorage.getItem('sb_collapsed') === '1';
+function applyCollapse() {
+  sb.classList.toggle('collapsed', collapsed);
+  document.getElementById('sbArrow').textContent = collapsed ? '▶' : '◀';
+  document.getElementById('sbToggleText').textContent = collapsed ? '' : 'Collapse';
+}
+applyCollapse();
+document.getElementById('sbToggle').addEventListener('click', () => {
+  collapsed = !collapsed;
+  localStorage.setItem('sb_collapsed', collapsed ? '1' : '0');
+  applyCollapse();
+});
+
+// Get data file from URL param
+const params = new URLSearchParams(location.search);
+const DATA_FILE = params.get('file') || 'data.json';
+
+let treeData = null;
+let selectedIds = new Set();
+let currentNode = null;
+
+const CAT_MAP = {
+  'Context':{'icon':'📖','color':'var(--c-context)'},
+  'Requirements':{'icon':'📋','color':'var(--c-requirements)'},
+  'Financial':{'icon':'💰','color':'var(--c-financial)'},
+  'Schedule':{'icon':'📅','color':'var(--c-schedule)'},
+  'Legal':{'icon':'⚖️','color':'var(--c-legal)'},
+  'Evaluation':{'icon':'🎯','color':'var(--c-evaluation)'},
+  'Technical':{'icon':'⚙️','color':'var(--c-technical)'},
+  'Strategy':{'icon':'🧭','color':'var(--c-strategy)'},
+  'Analysis':{'icon':'🔍','color':'var(--c-analysis)'},
+  'Section':{'icon':'📄','color':'var(--c-section)'},
+};
+
+async function loadData() {
+  try {
+    const res = await fetch(DATA_FILE);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    treeData = await res.json();
+    renderAll();
+  } catch (err) {
+    document.getElementById('mainContent').innerHTML = `
+      <div class="error-box">
+        <div class="error-icon">📂</div>
+        <div class="error-title">No data found</div>
+        <div class="error-msg">Run <strong>main.py</strong> first to generate the JSON from your RFP.</div>
+        <div style="font-family:monospace;font-size:11px;background:var(--mist);padding:8px 14px;border-radius:8px;color:var(--branch);margin-top:6px">python main.py</div>
+        <div class="error-msg" style="margin-top:6px;font-size:11px;opacity:0.5">Error: ${esc(err.message)}</div>
+      </div>`;
+    document.getElementById('docTitleHeader').textContent = 'Analyzer';
+  }
+}
+
+function renderAll() {
+  const nodes = treeData.nodes || [];
+  const docTitle = treeData.doc_title || 'RFP Document';
+  const company = treeData.company_name || '';
+  document.getElementById('docTitleHeader').textContent = docTitle;
+  document.title = docTitle + ' — Analyzer';
+  document.getElementById('headerMeta').innerHTML = `
+    <span>📋 ${nodes.length} section${nodes.length !== 1 ? 's' : ''}</span>
+    ${company ? `<span class="company-badge">🏢 ${esc(company)}</span>` : ''}
+  `;
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  nodes.forEach((node, i) => grid.appendChild(buildCard(node, i)));
+  const mc = document.getElementById('mainContent');
+  mc.innerHTML = '';
+  mc.appendChild(grid);
+}
+
+function buildCard(node, index) {
+  const cat = node.tag || 'Section';
+  const catInfo = CAT_MAP[cat] || CAT_MAP['Section'];
+  const isChecked = selectedIds.has(node.id);
+  const card = document.createElement('div');
+  card.className = 'card' + (isChecked ? ' checked' : '');
+  card.id = 'card-' + safeId(node.id);
+  card.style.setProperty('--accent-color', catInfo.color);
+  card.innerHTML = `
+    <div class="card-check-box${isChecked ? ' on' : ''}" id="chk-${safeId(node.id)}"></div>
+    <div class="card-inner">
+      <div class="card-icon-row">
+        <div class="card-icon">${catInfo.icon}</div>
+        <div class="card-cat-label">${esc(cat)}</div>
+      </div>
+      <div class="card-title">${esc(node.title)}</div>
+      <div class="card-desc">${esc(node.desc || '')}</div>
+    </div>
+    <div class="card-footer">
+      ${(node.taglines||[]).map(t=>`<span class="card-tag-pill">${esc(t)}</span>`).join('')}
+      ${(node.taglines||[]).length===0?`<span class="card-tag-pill">${esc(cat)}</span>`:''}
+    </div>`;
+  card.querySelector('.card-check-box').addEventListener('click', e => { e.stopPropagation(); toggleSelect(node.id); });
+  card.querySelector('.card-inner').addEventListener('click', () => openPanel(node));
+  card.querySelector('.card-footer').addEventListener('click', () => openPanel(node));
+  card.style.opacity='0'; card.style.transform='translateY(12px)';
+  card.style.transition=`opacity 0.3s ease ${index*50}ms,transform 0.3s ease ${index*50}ms,box-shadow 0.22s,border-color 0.22s`;
+  setTimeout(()=>{card.style.opacity='1';card.style.transform='';},10);
+  return card;
+}
+
+function toggleSelect(id) {
+  selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
+  const card=document.getElementById('card-'+safeId(id));
+  const chk=document.getElementById('chk-'+safeId(id));
+  if(card) card.classList.toggle('checked', selectedIds.has(id));
+  if(chk)  chk.classList.toggle('on', selectedIds.has(id));
+  document.getElementById('toolbarCount').textContent = selectedIds.size;
+  document.getElementById('selectToolbar').classList.toggle('visible', selectedIds.size > 0);
+  updatePanelBtn();
+}
+function clearSelection() {
+  [...selectedIds].forEach(id => toggleSelect(id));
+}
+function updatePanelBtn() {
+  if (!currentNode) return;
+  const btn = document.getElementById('panelAddBtn');
+  const on = selectedIds.has(currentNode.id);
+  btn.textContent = on ? '☑ Remove from Report' : '☐ Add to Report';
+  btn.classList.toggle('active', on);
+}
+function toggleFromPanel() { if (currentNode) toggleSelect(currentNode.id); }
+
+function openPanel(node) {
+  currentNode = node;
+  const cat = node.tag || 'Section';
+  const catInfo = CAT_MAP[cat] || CAT_MAP['Section'];
+  document.getElementById('panelCat').innerHTML = `<span class="panel-cat-dot" style="background:${catInfo.color}"></span> ${esc(cat)}`;
+  document.getElementById('panelTitle').textContent = node.title;
+  document.getElementById('panelBrief').innerHTML  = highlight(node.brief   || 'No brief available.', node.keywords||[]);
+  document.getElementById('panelSummary').innerHTML = highlight(node.summary || 'No summary available.', node.keywords||[]);
+  const sug = node.suggestions || [];
+  document.getElementById('suggestionsList').innerHTML = sug.length === 0
+    ? '<div style="font-size:12px;color:var(--slate);opacity:0.55;font-style:italic;padding:4px 2px;">No recommendations available.</div>'
+    : sug.map(s => `<div class="suggestion-item"><div class="suggestion-dot"></div><span>${esc(s)}</span></div>`).join('');
+  updatePanelBtn();
+  document.getElementById('panelOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
+  document.getElementById('panel').scrollTop=0;
+}
+function closePanel() {
+  currentNode=null;
+  document.getElementById('panelOverlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+document.getElementById('panelClose').addEventListener('click', closePanel);
+document.getElementById('panelBackdrop').addEventListener('click', closePanel);
+
+function openReport() {
+  if (selectedIds.size === 0) return;
+  const nodes = (treeData?.nodes||[]).filter(n => selectedIds.has(n.id));
+  const docTitle = treeData?.doc_title||'RFP Document';
+  const company  = treeData?.company_name||'';
+  const today = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('reportSubtitle').textContent = `${nodes.length} section${nodes.length>1?'s':''} · ${today}`;
+  document.getElementById('reportBody').innerHTML = `
+    <div class="report-header-block">
+      <div class="report-doc-label">RFP Solution Document</div>
+      <div class="report-doc-title">${esc(docTitle)}</div>
+      <div class="report-meta"><span>📅 ${today}</span><span>📋 ${nodes.length} sections</span>${company?`<span>🏢 ${esc(company)}</span>`:''}</div>
+    </div>
+    ${nodes.map((node,i)=>`
+      <div class="report-section">
+        <div class="report-section-header">
+          <div class="report-section-num">${i+1}</div>
+          <div><div class="report-section-tag">${esc(node.tag||'Section')}</div><div class="report-section-title">${esc(node.title)}</div></div>
+        </div>
+        <div class="report-brief">${esc(node.brief||'No brief available.')}</div>
+        <div class="report-summary">${esc(node.summary||'')}</div>
+        ${(node.suggestions||[]).map(s=>`<div class="report-suggestion"><div class="report-dot"></div><span>${esc(s)}</span></div>`).join('')}
+      </div>`).join('')}`;
+  document.getElementById('reportModal').classList.add('open');
+}
+function closeReport() { document.getElementById('reportModal').classList.remove('open'); }
+document.getElementById('reportModal').addEventListener('click', e => { if(e.target===document.getElementById('reportModal')) closeReport(); });
+
+function downloadReport() {
+  const nodes = (treeData?.nodes||[]).filter(n => selectedIds.has(n.id));
+  const docTitle = treeData?.doc_title||'RFP Document';
+  const company  = treeData?.company_name||'';
+  const today = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(docTitle)} — Report</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:sans-serif;color:#12082A;padding:48px 56px;max-width:780px;margin:0 auto}
+.lbl{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#7B4AE2;margin-bottom:8px}
+h1{font-size:24px;font-weight:800;margin-bottom:6px}.meta{font-size:12px;color:#6B5C9E;margin-bottom:36px;padding-bottom:18px;border-bottom:2px solid rgba(123,74,226,0.12)}
+.sec{margin-bottom:36px;padding-bottom:30px;border-bottom:1px solid rgba(123,74,226,0.09)}.sec:last-child{border-bottom:none}
+.sh{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}.num{width:26px;height:26px;border-radius:6px;background:#7B4AE2;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tag{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#7B4AE2;margin-bottom:3px}.stitle{font-size:15px;font-weight:800}
+.brief{font-size:13px;line-height:1.85;color:#3a2f5e;padding:13px 15px;background:#EDE8FA;border-radius:8px;border-left:3px solid #A78BFA;margin-bottom:10px}
+.sum{font-size:12.5px;line-height:1.8;color:#6B5C9E;font-style:italic;margin-bottom:13px}
+.sug{display:flex;gap:8px;padding:9px 12px;background:#F9F6FF;border:1px solid rgba(123,74,226,0.15);border-radius:7px;margin-bottom:6px;font-size:12.5px;line-height:1.6;color:#3a2f5e}
+.dot{width:6px;height:6px;border-radius:50%;background:#7B4AE2;flex-shrink:0;margin-top:5px}</style></head><body>
+<div class="lbl">RFP Solution Document</div><h1>${esc(docTitle)}</h1>
+<div class="meta">Generated ${today}${company?' · '+esc(company):''} · ${nodes.length} sections</div>
+${nodes.map((n,i)=>`<div class="sec"><div class="sh"><div class="num">${i+1}</div><div><div class="tag">${esc(n.tag||'Section')}</div><div class="stitle">${esc(n.title)}</div></div></div>
+<div class="brief">${esc(n.brief||'')}</div><div class="sum">${esc(n.summary||'')}</div>
+${(n.suggestions||[]).map(s=>`<div class="sug"><div class="dot"></div><span>${esc(s)}</span></div>`).join('')}</div>`).join('')}
+</body></html>`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+  a.download=`RFP_Report_${docTitle.replace(/\s+/g,'_').slice(0,40)}.html`;
+  a.click();
+}
+
+function highlight(text, keywords) {
+  if (!keywords || keywords.length===0) return esc(text);
+  const sorted=[...keywords].sort((a,b)=>b.length-a.length);
+  let result=esc(text);
+  sorted.forEach(kw => {
+    if (!kw||kw.length<2) return;
+    const e2=esc(kw);
+    const rx=new RegExp(e2.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+    result=result.replace(rx,m=>`<mark class="kw">${m}</mark>`);
+  });
+  return result;
+}
+function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function safeId(s) { return String(s??'').replace(/[^a-z0-9_-]/gi,'_'); }
+
+document.addEventListener('keydown', e => { if(e.key==='Escape'){closePanel();closeReport();} });
+loadData();
+</script>
+</body>
+</html>

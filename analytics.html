@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocTree — Analytics</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --branch:       #7B4AE2;
+    --branch-light: #A78BFA;
+    --root-g1:      #4C1D9B;
+    --glow:         rgba(123,74,226,0.20);
+    --ink:          #12082A;
+    --paper:        #F3EEFF;
+    --mist:         #EDE8FA;
+    --slate:        #6B5C9E;
+    --leaf-border:  rgba(123,74,226,0.22);
+    --sb-w:         220px;
+    --sb-bg:        #0D0720;
+    --sb-border:    rgba(123,74,226,0.18);
+    --sb-active:    rgba(123,74,226,0.28);
+    --sb-hover:     rgba(123,74,226,0.12);
+    --green:        #059669;
+    --red:          #dc2626;
+    --blue:         #2563eb;
+    --amber:        #d97706;
+  }
+  html, body { height:100%; font-family:'DM Sans',sans-serif; color:var(--ink); background:var(--paper); overflow:hidden; }
+  .shell { display:flex; height:100vh; }
+
+  /* SIDEBAR */
+  #sidebar { width:var(--sb-w); min-width:var(--sb-w); background:var(--sb-bg); display:flex; flex-direction:column; border-right:1px solid var(--sb-border); transition:width 0.28s ease,min-width 0.28s ease; overflow:hidden; z-index:100; flex-shrink:0; }
+  #sidebar.collapsed { width:60px; min-width:60px; }
+  .sb-brand { display:flex; align-items:center; gap:10px; padding:18px 16px 14px; border-bottom:1px solid var(--sb-border); text-decoration:none; }
+  .sb-brand-icon { width:30px; height:30px; flex-shrink:0; background:linear-gradient(135deg,var(--root-g1),var(--branch-light)); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .sb-brand-text { font-family:'Syne',sans-serif; font-weight:800; font-size:14px; color:#fff; white-space:nowrap; overflow:hidden; transition:opacity 0.2s; }
+  #sidebar.collapsed .sb-brand-text { opacity:0; pointer-events:none; }
+  .sb-nav { flex:1; padding:12px 10px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; }
+  .sb-nav::-webkit-scrollbar { display:none; }
+  .sb-item { display:flex; align-items:center; gap:11px; padding:10px 10px; border-radius:10px; text-decoration:none; color:rgba(255,255,255,0.5); font-size:13px; font-weight:500; transition:all 0.16s; white-space:nowrap; overflow:hidden; }
+  .sb-item:hover { background:var(--sb-hover); color:rgba(255,255,255,0.85); }
+  .sb-item.active { background:var(--sb-active); color:#fff; }
+  .sb-item-icon { font-size:17px; flex-shrink:0; width:20px; text-align:center; }
+  .sb-item-label { transition:opacity 0.2s; }
+  #sidebar.collapsed .sb-item-label { opacity:0; pointer-events:none; }
+  .sb-footer { padding:12px 10px 16px; border-top:1px solid var(--sb-border); }
+  .sb-toggle { width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:9px; color:rgba(255,255,255,0.4); padding:8px; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.15s; }
+  .sb-toggle:hover { color:rgba(255,255,255,0.8); background:rgba(255,255,255,0.08); }
+  .sb-toggle-text { transition:opacity 0.2s; font-size:11px; }
+  #sidebar.collapsed .sb-toggle-text { opacity:0; width:0; overflow:hidden; }
+  .sb-section-label { font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.2); padding:14px 10px 5px; }
+  #sidebar.collapsed .sb-section-label { opacity:0; }
+
+  /* MAIN */
+  .main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* TOPBAR */
+  .topbar { display:flex; align-items:center; padding:14px 36px; border-bottom:1px solid rgba(123,74,226,0.12); background:rgba(243,238,255,0.96); backdrop-filter:blur(10px); z-index:50; flex-shrink:0; }
+  .topbar-left { display:flex; flex-direction:column; gap:2px; }
+  .topbar-title { font-family:'Syne',sans-serif; font-weight:800; font-size:15px; color:var(--ink); }
+  .topbar-sub { font-size:11px; color:var(--slate); }
+  .topbar-right { margin-left:auto; }
+  .btn-refresh { background:rgba(123,74,226,0.08); border:1px solid var(--leaf-border); border-radius:8px; padding:8px 14px; font-size:11.5px; font-weight:600; color:var(--slate); cursor:pointer; transition:all 0.15s; display:flex; align-items:center; gap:6px; }
+  .btn-refresh:hover { background:rgba(123,74,226,0.14); color:var(--branch); }
+
+  /* SCROLL */
+  .scroll-area { flex:1; overflow-y:auto; }
+  .scroll-area::-webkit-scrollbar { width:4px; }
+  .scroll-area::-webkit-scrollbar-thumb { background:rgba(123,74,226,0.3); border-radius:4px; }
+
+  /* CONTENT */
+  .content { padding:24px 36px 60px; display:flex; flex-direction:column; gap:22px; }
+
+  /* SECTION HEADER */
+  .section-header { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .section-title { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; color:var(--ink); letter-spacing:-0.2px; }
+  .section-line { flex:1; height:1px; background:rgba(123,74,226,0.10); }
+  .section-badge { font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--branch); background:rgba(123,74,226,0.08); border:1px solid rgba(123,74,226,0.18); padding:2px 8px; border-radius:6px; }
+
+  /* KPI GRID */
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px; }
+  .kpi-card { background:#fff; border:1.5px solid var(--leaf-border); border-radius:14px; padding:16px 18px; position:relative; overflow:hidden; box-shadow:0 2px 10px rgba(76,29,155,0.06); transition:transform 0.2s,box-shadow 0.2s; }
+  .kpi-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(76,29,155,0.12); }
+  .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--kpi-color, var(--branch)); }
+  .kpi-icon { font-size:20px; margin-bottom:8px; }
+  .kpi-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; color:var(--ink); line-height:1; margin-bottom:4px; }
+  .kpi-label { font-size:10.5px; font-weight:600; color:var(--slate); text-transform:uppercase; letter-spacing:0.5px; }
+  .kpi-sub { font-size:10px; color:var(--slate); margin-top:3px; opacity:0.65; }
+
+  /* CHART GRID */
+  .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .chart-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; }
+  @media (max-width:900px) { .chart-grid,.chart-grid-3 { grid-template-columns:1fr; } }
+
+  .chart-card { background:#fff; border:1.5px solid var(--leaf-border); border-radius:14px; padding:20px 20px 16px; box-shadow:0 2px 10px rgba(76,29,155,0.06); }
+  .chart-card-title { font-family:'Syne',sans-serif; font-size:13px; font-weight:800; color:var(--ink); margin-bottom:4px; }
+  .chart-card-sub { font-size:11px; color:var(--slate); margin-bottom:16px; }
+  .chart-wrap { position:relative; }
+  .chart-wrap canvas { max-height:240px; }
+  .chart-wrap.tall canvas { max-height:280px; }
+
+  /* PROJECT TABLE */
+  .proj-table-wrap { background:#fff; border:1.5px solid var(--leaf-border); border-radius:14px; overflow:hidden; box-shadow:0 2px 10px rgba(76,29,155,0.06); }
+  .proj-table { width:100%; border-collapse:collapse; }
+  .proj-table th { font-size:9.5px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--slate); padding:12px 18px; text-align:left; border-bottom:1px solid rgba(123,74,226,0.09); background:var(--mist); }
+  .proj-table td { font-size:12.5px; color:var(--ink); padding:11px 18px; border-bottom:1px solid rgba(123,74,226,0.06); }
+  .proj-table tr:last-child td { border-bottom:none; }
+  .proj-table tr:hover td { background:rgba(123,74,226,0.02); }
+  .status-badge { display:inline-block; padding:2px 9px; border-radius:6px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+  .status-badge.win { background:rgba(5,150,105,0.1); color:var(--green); }
+  .status-badge.loss { background:rgba(220,38,38,0.09); color:var(--red); }
+  .status-badge.active { background:rgba(37,99,235,0.09); color:var(--blue); }
+
+  /* LOADING */
+  .loading-state { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:80px 40px; text-align:center; }
+  .spin { width:32px; height:32px; border-radius:50%; border:3px solid rgba(123,74,226,0.2); border-top-color:var(--branch); animation:spin 0.85s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <a class="sb-brand" href="index.html">
+      <div class="sb-brand-icon">🌳</div>
+      <span class="sb-brand-text">DOCTREE</span>
+    </a>
+        <nav class="sb-nav">
+      <div class="sb-section-label">Menu</div>
+      <a class="sb-item" href="index.html"><span class="sb-item-icon"></span><span class="sb-item-label">Projects</span></a>
+      <a class="sb-item" href="analyzer.html"><span class="sb-item-icon"></span><span class="sb-item-label">Analyzer</span></a>
+      <a class="sb-item" href="chatbot.html"><span class="sb-item-icon"></span><span class="sb-item-label">Chatbot</span></a>
+      <a class="sb-item active" href="analytics.html"><span class="sb-item-icon"></span><span class="sb-item-label">Analytics</span></a>
+      <a class="sb-item" href="market.html"><span class="sb-item-icon"></span><span class="sb-item-label">Market Research</span></a>
+      <a class="sb-item" href="ppt_gen.html"><span class="sb-item-icon"></span><span class="sb-item-label">PPT Generator</span></a>
+    </nav>
+    <div class="sb-footer">
+      <button class="sb-toggle" id="sbToggle">
+        <span id="sbArrow">◀</span>
+        <span class="sb-toggle-text" id="sbToggleText">Collapse</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title">📊 Analytics Dashboard</div>
+        <div class="topbar-sub">Project performance & sector distribution</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn-refresh" onclick="loadAnalytics()">↺ Refresh</button>
+      </div>
+    </div>
+
+    <div class="scroll-area">
+      <div class="content" id="content">
+        <div class="loading-state">
+          <div class="spin"></div>
+          <div style="font-size:13px;color:var(--slate)">Loading analytics…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:5000/api';
+
+// Sidebar collapse
+const sbEl = document.getElementById('sidebar');
+let collapsed = localStorage.getItem('sb_collapsed') === '1';
+function applyCollapse() {
+  sbEl.classList.toggle('collapsed', collapsed);
+  document.getElementById('sbArrow').textContent = collapsed ? '▶' : '◀';
+  document.getElementById('sbToggleText').textContent = collapsed ? '' : 'Collapse';
+}
+applyCollapse();
+document.getElementById('sbToggle').addEventListener('click', () => {
+  collapsed = !collapsed;
+  localStorage.setItem('sb_collapsed', collapsed ? '1' : '0');
+  applyCollapse();
+});
+
+// Chart color palette — purple-forward
+const PALETTE = [
+  '#7B4AE2','#A78BFA','#4C1D9B','#059669','#2563eb',
+  '#d97706','#dc2626','#db2777','#0891b2','#4f46e5',
+];
+
+let charts = {};
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => c?.destroy?.());
+  charts = {};
+}
+
+async function loadAnalytics() {
+  destroyCharts();
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading-state"><div class="spin"></div><div style="font-size:13px;color:var(--slate)">Loading analytics…</div></div>';
+
+  let data;
+  try {
+    const res = await fetch(`${API}/analytics-data`);
+    if (!res.ok) throw new Error();
+    data = await res.json();
+  } catch {
+    data = await buildFallbackData();
+  }
+
+  renderAnalytics(data);
+}
+
+async function buildFallbackData() {
+  // Scan local JSON files
+  const files = ['data.json','data2.json','data3.json','data4.json','data5.json'];
+  const projects = [];
+  await Promise.all(files.map(async (f, i) => {
+    try {
+      const r = await fetch(f + '?_=' + Date.now());
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d || !d.nodes) return;
+      projects.push({
+        id: 'local_' + i,
+        doc_title:    d.doc_title || f,
+        company_name: d.company_name || '—',
+        category:     'General',
+        status:       'active',
+        employee_count: 0,
+        section_count: d.nodes.length,
+        created_at: new Date().toISOString(),
+      });
+    } catch {}
+  }));
+
+  const sector_distribution = {};
+  projects.forEach(p => {
+    const cat = p.category || 'General';
+    sector_distribution[cat] = (sector_distribution[cat] || 0) + 1;
+  });
+
+  const wins = projects.filter(p => p.status === 'win').length;
+  const losses = projects.filter(p => p.status === 'loss').length;
+  const active = projects.filter(p => p.status === 'active').length;
+
+  return {
+    sector_distribution,
+    total_projects: projects.length,
+    wins, losses, active_projects: active,
+    completed_projects: wins + losses,
+    employees: projects.reduce((s,p) => s + (p.employee_count||0), 0),
+    win_rate: wins + losses > 0 ? Math.round(wins / (wins + losses) * 100) : 0,
+    monthly_trend: {},
+    projects,
+  };
+}
+
+function renderAnalytics(data) {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <!-- KPI ROW -->
+    <div>
+      <div class="section-header">
+        <div class="section-title">Overview</div>
+        <div class="section-line"></div>
+        <div class="section-badge">KPIs</div>
+      </div>
+      <div class="kpi-grid" id="kpiGrid"></div>
+    </div>
+
+    <!-- CHARTS ROW 1 -->
+    <div>
+      <div class="section-header">
+        <div class="section-title">Sector & Performance</div>
+        <div class="section-line"></div>
+        <div class="section-badge">Charts</div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-card-title">Sector Distribution</div>
+          <div class="chart-card-sub">Projects by category — hover for counts</div>
+          <div class="chart-wrap"><canvas id="sectorChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">Win / Loss Breakdown</div>
+          <div class="chart-card-sub">Project outcome distribution</div>
+          <div class="chart-wrap"><canvas id="winLossChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 2 -->
+    <div>
+      <div class="section-header">
+        <div class="section-title">Trends & Metrics</div>
+        <div class="section-line"></div>
+        <div class="section-badge">Analysis</div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-card-title">Project Status Overview</div>
+          <div class="chart-card-sub">Active vs completed breakdown</div>
+          <div class="chart-wrap"><canvas id="statusChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">Monthly Volume</div>
+          <div class="chart-card-sub">Projects uploaded per month</div>
+          <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROJECT TABLE -->
+    <div>
+      <div class="section-header">
+        <div class="section-title">All Projects</div>
+        <div class="section-line"></div>
+        <div class="section-badge">Table</div>
+      </div>
+      <div class="proj-table-wrap">
+        <table class="proj-table">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>Company</th>
+              <th>Sector</th>
+              <th>Status</th>
+              <th>Sections</th>
+              <th>Employees</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="projTableBody"></tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // KPIs
+  const kpis = [
+    { icon:'📋', value: data.total_projects,     label:'Total Projects',   sub:'All uploaded RFPs', color:'var(--branch)' },
+    { icon:'✓',  value: data.wins,               label:'Wins',             sub:'Successful bids',   color:'#059669' },
+    { icon:'✗',  value: data.losses,             label:'Losses',           sub:'Unsuccessful bids', color:'#dc2626' },
+    { icon:'●',  value: data.active_projects,    label:'Active',           sub:'In progress',       color:'#2563eb' },
+    { icon:'🏁', value: data.completed_projects, label:'Completed',        sub:'Decided projects',  color:'#d97706' },
+    { icon:'📈', value: data.win_rate + '%',      label:'Win Rate',         sub:'Of decided projects',color:'#7B4AE2' },
+    { icon:'👥', value: data.employees,           label:'Employees',        sub:'Across all projects',color:'#0891b2' },
+  ];
+
+  const kpiGrid = document.getElementById('kpiGrid');
+  kpis.forEach((k, i) => {
+    const card = document.createElement('div');
+    card.className = 'kpi-card';
+    card.style.setProperty('--kpi-color', k.color);
+    card.style.opacity = '0'; card.style.transform = 'translateY(10px)';
+    card.innerHTML = `
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-sub">${k.sub}</div>`;
+    setTimeout(() => {
+      card.style.transition = `opacity 0.3s ease ${i*60}ms, transform 0.3s ease ${i*60}ms`;
+      card.style.opacity = '1'; card.style.transform = '';
+    }, 50);
+    kpiGrid.appendChild(card);
+  });
+
+  // Chart.js defaults
+  Chart.defaults.font.family = "'DM Sans', sans-serif";
+  Chart.defaults.color = '#6B5C9E';
+
+  // SECTOR PIE
+  const sectors = Object.entries(data.sector_distribution);
+  if (sectors.length > 0) {
+    charts.sector = new Chart(document.getElementById('sectorChart'), {
+      type: 'doughnut',
+      data: {
+        labels: sectors.map(s => s[0]),
+        datasets: [{
+          data: sectors.map(s => s[1]),
+          backgroundColor: PALETTE.slice(0, sectors.length),
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverBorderColor: '#fff',
+          hoverOffset: 8,
+        }],
+      },
+      options: {
+        responsive: true,
+        cutout: '60%',
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { font: { size: 12 }, padding: 14, usePointStyle: true, pointStyleWidth: 10 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.label}: ${ctx.raw} project${ctx.raw !== 1 ? 's' : ''}`,
+            },
+          },
+        },
+      },
+    });
+  } else {
+    renderNoData('sectorChart');
+  }
+
+  // WIN/LOSS PIE
+  const wlData = [data.wins, data.losses, data.active_projects].filter(v => v > 0);
+  const wlLabels = ['Wins','Losses','Active'].filter((_, i) => [data.wins, data.losses, data.active_projects][i] > 0);
+  if (wlData.length > 0) {
+    charts.winloss = new Chart(document.getElementById('winLossChart'), {
+      type: 'pie',
+      data: {
+        labels: wlLabels,
+        datasets: [{
+          data: wlData,
+          backgroundColor: ['#059669','#dc2626','#2563eb'],
+          borderWidth: 2,
+          borderColor: '#fff',
+          hoverOffset: 8,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { font: { size: 12 }, padding: 14, usePointStyle: true, pointStyleWidth: 10 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.label}: ${ctx.raw} project${ctx.raw !== 1 ? 's' : ''}`,
+            },
+          },
+        },
+      },
+    });
+  } else {
+    renderNoData('winLossChart');
+  }
+
+  // STATUS BAR
+  charts.status = new Chart(document.getElementById('statusChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Active', 'Wins', 'Losses', 'Completed'],
+      datasets: [{
+        label: 'Projects',
+        data: [data.active_projects, data.wins, data.losses, data.completed_projects],
+        backgroundColor: ['rgba(37,99,235,0.72)','rgba(5,150,105,0.72)','rgba(220,38,38,0.72)','rgba(123,74,226,0.72)'],
+        borderColor:     ['#2563eb','#059669','#dc2626','#7B4AE2'],
+        borderWidth: 1.5,
+        borderRadius: 8,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgba(123,74,226,0.07)' } },
+        x: { grid: { display: false } },
+      },
+      plugins: { legend: { display: false } },
+    },
+  });
+
+  // TREND LINE
+  const trend = data.monthly_trend || {};
+  const trendKeys = Object.keys(trend);
+  if (trendKeys.length > 0) {
+    charts.trend = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trendKeys.map(k => {
+          const [y, m] = k.split('-');
+          return new Date(y, m-1).toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+        }),
+        datasets: [{
+          label: 'Projects',
+          data: trendKeys.map(k => trend[k]),
+          borderColor: '#7B4AE2',
+          backgroundColor: 'rgba(123,74,226,0.08)',
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: '#7B4AE2',
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          borderWidth: 2.5,
+        }],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgba(123,74,226,0.07)' } },
+          x: { grid: { display: false } },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+  } else {
+    // Show placeholder chart with dummy data when no trend data
+    charts.trend = new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: ['Jan','Feb','Mar','Apr','May','Jun'],
+        datasets: [{
+          label: 'Projects',
+          data: [0, 0, 0, 0, 0, data.total_projects],
+          borderColor: '#A78BFA',
+          backgroundColor: 'rgba(123,74,226,0.05)',
+          tension: 0.4,
+          fill: true,
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: 'rgba(123,74,226,0.07)' } },
+          x: { grid: { display: false } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { title: () => 'Upload history not available' } },
+        },
+      },
+    });
+  }
+
+  // PROJECT TABLE
+  const tbody = document.getElementById('projTableBody');
+  const projects = data.projects || [];
+  if (projects.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--slate);padding:28px;font-size:13px;opacity:0.6">No projects found. Upload RFP documents to see them here.</td></tr>';
+  } else {
+    projects.forEach(p => {
+      const tr = document.createElement('tr');
+      const statusClass = p.status === 'win' ? 'win' : p.status === 'loss' ? 'loss' : 'active';
+      const created = p.created_at ? new Date(p.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+      tr.innerHTML = `
+        <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.doc_title||'')}">${esc(p.doc_title||'—')}</td>
+        <td style="color:var(--slate)">${esc(p.company_name||'—')}</td>
+        <td><span style="background:rgba(123,74,226,0.08);border:1px solid rgba(123,74,226,0.18);padding:2px 8px;border-radius:5px;font-size:10.5px;font-weight:600;color:var(--branch)">${esc(p.category||'General')}</span></td>
+        <td><span class="status-badge ${statusClass}">${p.status||'active'}</span></td>
+        <td style="color:var(--slate)">${p.section_count||0}</td>
+        <td style="color:var(--slate)">${p.employee_count||0}</td>
+        <td style="color:var(--slate);font-size:11.5px">${created}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+function renderNoData(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const wrap = canvas.parentElement;
+  canvas.style.display = 'none';
+  const msg = document.createElement('div');
+  msg.style.cssText = 'text-align:center;padding:40px 20px;color:var(--slate);font-size:12.5px;opacity:0.65;';
+  msg.innerHTML = '📊 No data yet<br><span style="font-size:11px">Upload RFP projects to see charts</span>';
+  wrap.appendChild(msg);
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadAnalytics();
+</script>
+</body>
+</html>
